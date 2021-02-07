@@ -6,11 +6,12 @@ namespace hash_server {
 
 boost::system::error_code ResponseWriterImpl::WriteResponse(
     boost::asio::ip::tcp::socket& socket,
-    const std::string& s)
+    const std::string& response)
 {
     try
     {
-        boost::asio::write(socket, boost::asio::buffer(s.c_str(), s.size()));
+        boost::asio::write(socket,
+            boost::asio::buffer(response.c_str(), response.size()));
     }
     catch (const boost::system::system_error& e)
     {

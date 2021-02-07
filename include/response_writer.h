@@ -12,7 +12,7 @@ class ResponseWriter
 public:
     virtual boost::system::error_code WriteResponse(
         boost::asio::ip::tcp::socket& socket,
-        const std::string& s) = 0;
+        const std::string& response) = 0;
 };
 
 std::shared_ptr<ResponseWriter> CreateResponseWriter();

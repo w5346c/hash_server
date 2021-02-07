@@ -1,5 +1,7 @@
 add_executable(hash_server
-    hash_server.cpp)
+    session.cpp
+    server.cpp
+    main.cpp)
 
 target_include_directories(hash_server PUBLIC
     ${CMAKE_SOURCE_DIR}/include)
