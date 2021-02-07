@@ -16,39 +16,36 @@ RequestResponderImpl::RequestResponderImpl(
     std::shared_ptr<ResponseWriter> responseWriter)
     : m_hashCalculator(hashCalculator)
     , m_responseWriter(responseWriter)
-{
-    assert(hashCalculator);
-    assert(responseWriter);
-}
+{}
 
-boost::system::error_code RequestResponderImpl::ProcessData(
+boost::system::error_code RequestResponderImpl::ProcessRequest(
     boost::asio::ip::tcp::socket& socket,
     const std::string& request)
 {
     try
     {
-        auto len = request.size();
+        size_t strStart{};
 
-        size_t stringStartIdx{};
+        auto len = request.size();
 
         for (size_t i = 0; i < len; i++)
         {
-            if (request[i] == '!')
-            {
-                auto response = m_hashCalculator->CalculateHashString(
-                    m_unprocessedData + request.substr(stringStartIdx, i - stringStartIdx)) + "!";
+            if (request[i] != '\n')
+                continue;
+    
+            auto response = m_hashCalculator->CalculateHashString(
+                m_unrespondedData + request.substr(strStart, i - strStart)) + "\n";
 
-                m_unprocessedData.clear();
+            m_unrespondedData.clear();
 
-                EXPECT_OK(m_responseWriter->WriteResponse(socket, response));
+            EXPECT_OK(m_responseWriter->WriteResponse(socket, response));
 
-                stringStartIdx = i + 1;
-            }
+            strStart = i + 1;
         }
 
-        if (stringStartIdx < len)
+        if (strStart < len)
         {
-            m_unprocessedData.append(request.substr(stringStartIdx, len - stringStartIdx));
+            m_unrespondedData.append(request.substr(strStart, len - strStart));
         }
     }
     catch (const boost::system::system_error& e)

@@ -1,8 +1,6 @@
 #include <iostream>
 #include <thread>
 #include <utility>
-#include <chrono>
-#include <atomic>
 
 #include <boost/program_options.hpp>
 #include <boost/asio.hpp>
@@ -21,8 +19,6 @@ using tcp = boost::asio::ip::tcp;
 
 void session(tcp::socket socket, std::shared_ptr<hash_server::RequestResponder> responder)
 {
-    assert(responder);
-
     std::cout << "session() begin, socket = " << socket.native_handle() << std::endl;
 
     using namespace std::chrono_literals;
@@ -30,24 +26,20 @@ void session(tcp::socket socket, std::shared_ptr<hash_server::RequestResponder> 
     const int MaxBufferSize = 512;
     char buffer[MaxBufferSize] = {};
 
-    boost::system::error_code res;
-
     try
     {
         while (true)
         {
-            size_t bytesRead = socket.read_some(boost::asio::buffer(buffer), res);
+            boost::system::error_code res;
+            auto bytesRead = socket.read_some(boost::asio::buffer(buffer), res);
 
             if (res == boost::asio::error::eof)
                 break;
       
             EXPECT_OK(res);
 
-            std::string str(buffer, bytesRead);
-            
-            str.erase(std::remove(str.begin(), str.end(), '\n'), str.end()); // TODO: remove me
-
-            EXPECT_OK(responder->ProcessData(socket, str));
+            std::string request(buffer, bytesRead);
+            EXPECT_OK(responder->ProcessRequest(socket, request));
         }
 
         std::cout << "session() end, socket = " << socket.native_handle() << std::endl;

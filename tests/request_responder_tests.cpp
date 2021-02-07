@@ -13,12 +13,9 @@
 
 #include "mocks.h"
 
-using namespace ::testing;
-
 namespace hash_server::tests {
 
-struct DummySocket : boost::asio::socket_base
-{};
+using tcp = boost::asio::ip::tcp;
 
 class RequestResponderTest : public ::testing::Test {
 protected:
@@ -26,7 +23,7 @@ protected:
     RequestResponderTest()
     {
         auto hashCalculator = std::make_shared<NiceMock<MockHashCalculator>>();
-        m_responseWriter = std::make_shared<MockResponseWriter>();
+        m_responseWriter = std::make_shared<StrictMock<MockResponseWriter>>();
 
         ON_CALL(*hashCalculator, CalculateHashString(_)).WillByDefault(Invoke(
             [](const std::string& s)
@@ -37,78 +34,80 @@ protected:
         m_testee = CreateRequestResponder(hashCalculator, m_responseWriter);
     }
 
-    std::shared_ptr<MockResponseWriter> m_responseWriter;
+    boost::asio::ip::tcp::socket& GetDummySocket()
+    {   
+        // TODO: dirty crutch; there must be a better way...
+        return reinterpret_cast<tcp::socket&>(m_dummySocket);
+    }
 
+    void CallProcessRequest(const std::string& request)
+    {
+        EXPECT_FALSE(m_testee->ProcessRequest(GetDummySocket(), request));
+    }
+
+    void ExpectResponse(const std::string& response, int times = 1)
+    {
+        EXPECT_CALL(*m_responseWriter, WriteResponse(_, response)).Times(times);
+    }
+
+    void ExpectNoResponse()
+    {
+        EXPECT_CALL(*m_responseWriter, WriteResponse(_, _)).Times(0);
+    }
+
+    std::shared_ptr<MockResponseWriter> m_responseWriter;
     std::shared_ptr<RequestResponder> m_testee;
 
+    char m_dummySocket[sizeof(tcp::socket)] = {};
 };
 
 TEST_F(RequestResponderTest, CompleteRequest)
 {
-    DummySocket dummySocket;
-
-    // TODO: dirty crutch; there must be a better way...
-    auto& socket = reinterpret_cast<boost::asio::ip::tcp::socket&>(dummySocket);
-
     InSequence seq;
-    EXPECT_CALL(*m_responseWriter, WriteResponse(_, "hash(String01)!"));
-    EXPECT_CALL(*m_responseWriter, WriteResponse(_, "hash(String02)!"));
+    ExpectResponse("hash(String01)\n");
+    ExpectResponse("hash(String02)\n");
 
-    EXPECT_FALSE(m_testee->ProcessData(socket, "String01!String02!"));
+    CallProcessRequest("String01\nString02\n");
 }
 
 TEST_F(RequestResponderTest, IncompleteRequest)
 {
-    DummySocket dummySocket;
-    auto& socket = reinterpret_cast<boost::asio::ip::tcp::socket&>(dummySocket);
+    ExpectNoResponse();
 
-    InSequence seq;
-    EXPECT_CALL(*m_responseWriter, WriteResponse(_, _)).Times(0);
-
-    EXPECT_FALSE(m_testee->ProcessData(socket, "RequestWithNoNewLine"));
+    CallProcessRequest("RequestWithNoNewLine");
 }
 
 TEST_F(RequestResponderTest, PartialRequests)
 {
-    DummySocket dummySocket;
-    auto& socket = reinterpret_cast<boost::asio::ip::tcp::socket&>(dummySocket);
-
     InSequence seq;
-    EXPECT_CALL(*m_responseWriter, WriteResponse(_, "hash(String01)!"));
-    EXPECT_CALL(*m_responseWriter, WriteResponse(_, "hash(String02)!"));
-    EXPECT_CALL(*m_responseWriter, WriteResponse(_, "hash(String03)!"));
-    EXPECT_CALL(*m_responseWriter, WriteResponse(_, "hash(String04)!"));
-    EXPECT_CALL(*m_responseWriter, WriteResponse(_, "hash(String05)!"));
+    ExpectResponse("hash(String01)\n");
+    ExpectResponse("hash(String02)\n");
+    ExpectResponse("hash(String03)\n");
+    ExpectResponse("hash(String04)\n");
+    ExpectResponse("hash(String05)\n");
 
-    EXPECT_FALSE(m_testee->ProcessData(socket, "Str"));
-    EXPECT_FALSE(m_testee->ProcessData(socket, "ing01!String02!String03!Str"));
-    EXPECT_FALSE(m_testee->ProcessData(socket, "ing04!S"));
-    EXPECT_FALSE(m_testee->ProcessData(socket, "trin"));
-    EXPECT_FALSE(m_testee->ProcessData(socket, "g05!"));
+    CallProcessRequest("Str");
+    CallProcessRequest("ing01\nString02\nString03\nStr");
+    CallProcessRequest("ing04\nS");
+    CallProcessRequest("trin");
+    CallProcessRequest("g05\n");
 }
 
 TEST_F(RequestResponderTest, AllStringsEmpty)
 {
-    DummySocket dummySocket;
-    auto& socket = reinterpret_cast<boost::asio::ip::tcp::socket&>(dummySocket);
+    ExpectResponse("hash()\n", 5);
 
-    InSequence seq;
-    EXPECT_CALL(*m_responseWriter, WriteResponse(_, "hash()!")).Times(5);
-
-    EXPECT_FALSE(m_testee->ProcessData(socket, "!!!!!"));
+    CallProcessRequest("\n\n\n\n\n");
 }
 
 TEST_F(RequestResponderTest, SomeStringsEmpty)
 {
-    DummySocket dummySocket;
-    auto& socket = reinterpret_cast<boost::asio::ip::tcp::socket&>(dummySocket);
-
     InSequence seq;
-    EXPECT_CALL(*m_responseWriter, WriteResponse(_, "hash(S)!"));
-    EXPECT_CALL(*m_responseWriter, WriteResponse(_, "hash()!")).Times(3);
-    EXPECT_CALL(*m_responseWriter, WriteResponse(_, "hash(P)!"));
+    ExpectResponse("hash(S)\n");
+    ExpectResponse("hash()\n", 3);
+    ExpectResponse("hash(P)\n");
 
-    EXPECT_FALSE(m_testee->ProcessData(socket, "S!!!!P!"));
+    CallProcessRequest("S\n\n\n\nP\n");
 }
 
 } // namespace hash_server::tests

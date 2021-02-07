@@ -13,7 +13,7 @@ namespace hash_server {
 class RequestResponder
 {
 public:
-    virtual boost::system::error_code ProcessData(
+    virtual boost::system::error_code ProcessRequest(
         boost::asio::ip::tcp::socket& socket,
         const std::string& request) = 0;
 };
