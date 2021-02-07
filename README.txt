@@ -44,7 +44,7 @@ Hash server started on port 6666
 
 5. Open another terminal and send some requests to the server
 
-dbavykin@VirtualBox02:~$ printf "String01\nString02\nString03\n" | nc localhost 6666
+dbavykin@VirtualBox02:~$ printf "String01\nString02\nString03\n" | nc -N localhost 6666
 4a4e5d4e10815b53
 b77ad2355ec30835
 cd246a43141830b7
